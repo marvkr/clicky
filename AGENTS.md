@@ -84,8 +84,9 @@ open leanring-buddy.xcodeproj
 
 # Select the leanring-buddy scheme, set signing team, Cmd+R to build and run
 
-# Known non-blocking warnings: Swift 6 concurrency warnings,
-# deprecated onChange warning in OverlayWindow.swift. Do NOT attempt to fix these.
+# Note: Swift 6 concurrency warnings and deprecated onChange were fixed.
+# If new concurrency warnings appear, fix them using the same patterns
+# (Task { @MainActor in }, MainActor.assumeIsolated, nonisolated(unsafe)).
 ```
 
 **Do NOT run `xcodebuild` from the terminal** — it invalidates TCC (Transparency, Consent, and Control) permissions and the app will need to re-request screen recording, accessibility, etc.
@@ -141,7 +142,7 @@ IMPORTANT: Follow these naming rules strictly. Clarity is the top priority.
 
 - Do not add features, refactor code, or make "improvements" beyond what was asked
 - Do not add docstrings, comments, or type annotations to code you did not change
-- Do not try to fix the known non-blocking warnings (Swift 6 concurrency, deprecated onChange)
+- If new Swift 6 concurrency warnings appear, fix them using `Task { @MainActor in }`, `MainActor.assumeIsolated`, or `nonisolated(unsafe)` as appropriate
 - Do not rename the project directory or scheme (the "leanring" typo is intentional/legacy)
 - Do not run `xcodebuild` from the terminal — it invalidates TCC permissions
 
