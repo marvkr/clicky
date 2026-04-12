@@ -649,8 +649,12 @@ final class CompanionManager: ObservableObject {
             voiceState = .processing
 
             do {
+                let pipelineStart = Date()
+
                 // Capture all connected screens so the AI has full context
+                let screenshotStart = Date()
                 let screenCaptures = try await CompanionScreenCaptureUtility.captureAllScreensAsJPEG()
+                print("⏱️ Screenshot capture: \(String(format: "%.0f", Date().timeIntervalSince(screenshotStart) * 1000))ms")
 
                 guard !Task.isCancelled else { return }
 
@@ -762,15 +766,19 @@ final class CompanionManager: ObservableObject {
 
                 // Play the response via TTS. Keep the spinner (processing state)
                 // until the audio actually starts playing, then switch to responding.
-                print("🔊 TTS: spokenText='\(spokenText.prefix(100))', empty=\(spokenText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)")
+                let totalPipelineTime = Date().timeIntervalSince(pipelineStart)
+                print("⏱️ Pipeline before TTS: \(String(format: "%.1f", totalPipelineTime))s")
+                print("🔊 TTS: \(spokenText.count) chars")
                 if !spokenText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     do {
+                        let ttsStart = Date()
                         try await elevenLabsTTSClient.speakText(spokenText)
-                        // speakText returns after player.play() — audio is now playing
+                        let ttsTime = Date().timeIntervalSince(ttsStart)
+                        print("⏱️ TTS playback: \(String(format: "%.1f", ttsTime))s")
                         voiceState = .responding
                     } catch {
                         ClickyAnalytics.trackTTSError(error: error.localizedDescription)
-                        print("⚠️ ElevenLabs TTS error: \(error)")
+                        print("⚠️ TTS error: \(error)")
                         speakCreditsErrorFallback()
                     }
                 }

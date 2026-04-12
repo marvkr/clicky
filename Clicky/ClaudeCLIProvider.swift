@@ -37,15 +37,14 @@ enum ClaudeCLIProvider {
         fullPrompt: String,
         model: String
     ) throws -> (process: Process, stdoutFileHandle: FileHandle) {
-        let emptyMCPConfigURL = try writeEmptyMCPConfig()
-
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binaryPath)
         process.arguments = [
             "--print",
             "--output-format", "stream-json",
             "--verbose",
-            "--mcp-config", emptyMCPConfigURL.path,
+            "--bare",
+            "--no-session-persistence",
             "--system-prompt", systemPrompt,
             "--model", model,
             fullPrompt

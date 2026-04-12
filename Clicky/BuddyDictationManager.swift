@@ -523,6 +523,18 @@ final class BuddyDictationManager: NSObject, ObservableObject {
         // sample rate. A reused engine returns stale format info after stop/restart.
         audioEngine = AVAudioEngine()
 
+        // Kill the localspeechrecognition service before starting a new session.
+        // The service enters a broken state (Code=1101) after rapid start/stop
+        // cycles and doesn't recover. Killing it forces macOS to respawn a fresh one.
+        let killTask = Process()
+        killTask.executableURL = URL(fileURLWithPath: "/usr/bin/killall")
+        killTask.arguments = ["localspeechrecognition"]
+        killTask.standardOutput = Pipe()
+        killTask.standardError = Pipe()
+        try? killTask.run()
+        killTask.waitUntilExit()
+        try await Task.sleep(for: .milliseconds(300))
+
         print("🎙️ BuddyDictationManager: opening transcription provider \(transcriptionProvider.displayName)")
 
         let activeTranscriptionSession = try await transcriptionProvider.startStreamingSession(
@@ -554,24 +566,41 @@ final class BuddyDictationManager: NSObject, ObservableObject {
         self.activeTranscriptionSession = activeTranscriptionSession
         print("🎙️ BuddyDictationManager: provider ready, starting audio engine")
 
-        let inputNode = audioEngine.inputNode
+        // Try to start the audio engine with up to 3 attempts, creating a fresh
+        // engine each time. The format reported by outputFormat can be stale after
+        // repeated stop/start cycles, causing format mismatch crashes (-10868).
+        // Retrying with a fresh engine usually resolves it.
+        var lastError: Error?
+        for attempt in 1...3 {
+            do {
+                audioEngine = AVAudioEngine()
+                let inputNode = audioEngine.inputNode
+                let reportedFormat = inputNode.outputFormat(forBus: 0)
+                print("🎙️ BuddyDictationManager: mic format — \(reportedFormat.sampleRate) Hz, \(reportedFormat.channelCount) ch (attempt \(attempt))")
 
-        // Pass nil for the tap format so AVAudioEngine uses the node's actual
-        // hardware format with zero conversion. Both outputFormat and inputFormat
-        // can report stale/wrong sample rates after engine stop/restart cycles,
-        // so letting the engine decide avoids format mismatch crashes entirely.
-        let actualFormat = inputNode.outputFormat(forBus: 0)
-        print("🎙️ BuddyDictationManager: mic format — \(actualFormat.sampleRate) Hz, \(actualFormat.channelCount) ch (tap using native format)")
+                inputNode.removeTap(onBus: 0)
+                inputNode.installTap(onBus: 0, bufferSize: 1024, format: nil) { [weak self] buffer, _ in
+                    self?.activeTranscriptionSession?.appendAudioBuffer(buffer)
+                    self?.updateAudioPowerLevel(from: buffer)
+                }
 
-        inputNode.removeTap(onBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: actualFormat) { [weak self] buffer, _ in
-            self?.activeTranscriptionSession?.appendAudioBuffer(buffer)
-            self?.updateAudioPowerLevel(from: buffer)
+                audioEngine.prepare()
+                try audioEngine.start()
+                lastError = nil
+                break
+            } catch {
+                print("⚠️ BuddyDictationManager: engine start failed (attempt \(attempt)): \(error)")
+                lastError = error
+                audioEngine.stop()
+                audioEngine.inputNode.removeTap(onBus: 0)
+                // Brief pause before retry to let Core Audio settle
+                try await Task.sleep(for: .milliseconds(200))
+            }
         }
 
-        audioEngine.reset()
-        audioEngine.prepare()
-        try audioEngine.start()
+        if let lastError {
+            throw lastError
+        }
     }
 
     private func handleRecognitionError(_ error: Error) {

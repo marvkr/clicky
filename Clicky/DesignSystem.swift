@@ -53,10 +53,10 @@ enum DS {
         static let textPrimary = Color(hex: "#ECEEED")
 
         /// Secondary text — descriptions, hints, muted labels.
-        static let textSecondary = Color(hex: "#ADB5B2")
+        static let textSecondary = Color(hex: "#D0D5D3")
 
-        /// Tertiary text — very muted, used for section labels, timestamps, disabled text.
-        static let textTertiary = Color(hex: "#6B736F")
+        /// Tertiary text — section labels, timestamps, footer actions.
+        static let textTertiary = Color(hex: "#9BA3A0")
 
         /// Text used on top of the accent fill (#2563eb blue), like the primary button label.
         /// White on #2563eb achieves ~5.1:1 contrast — WCAG AA compliant.

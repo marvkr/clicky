@@ -842,9 +842,9 @@ private struct LiquidGlassPanelModifier: ViewModifier {
             }
         } else {
             content
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .shadow(color: Color.black.opacity(0.3), radius: 16, x: 0, y: 8)
+                .shadow(color: Color.black.opacity(0.4), radius: 20, x: 0, y: 10)
                 .environment(\.colorScheme, .dark)
         }
     }
@@ -859,7 +859,7 @@ private struct GlassSegmentBackgroundModifier: ViewModifier {
                 .glassEffect(.clear, in: .rect(cornerRadius: 6))
         } else {
             content
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
     }
 }
@@ -873,7 +873,7 @@ private struct GlassCardBackgroundModifier: ViewModifier {
                 .glassEffect(.clear, in: .rect(cornerRadius: DS.CornerRadius.medium))
         } else {
             content
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: DS.CornerRadius.medium, style: .continuous))
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DS.CornerRadius.medium, style: .continuous))
         }
     }
 }

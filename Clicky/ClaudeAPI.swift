@@ -71,31 +71,45 @@ class ClaudeAPI {
         }
 
         let prepTime = Date().timeIntervalSince(startTime)
+        let imageSizeKB = images.reduce(0) { $0 + $1.data.count } / 1024
         print("🤖 AI CLI provider: \(provider.rawValue), binary: \(binaryPath)")
-        print("⏱️ Prep time: \(String(format: "%.1f", prepTime * 1000))ms")
+        print("⏱️ [1/5] Prep (write \(images.count) image, \(imageSizeKB)KB): \(String(format: "%.0f", prepTime * 1000))ms")
 
         let responseText: String
-        let spawnTime = Date()
 
         switch provider {
         case .claude:
+            let promptBuildStart = Date()
             let fullPrompt = ClaudeCLIProvider.buildPrompt(
                 images: images,
                 tempImageURLs: tempImageURLs,
                 conversationHistory: conversationHistory,
                 userPrompt: userPrompt
             )
+            let promptBuildTime = Date().timeIntervalSince(promptBuildStart)
+            print("⏱️ [2/5] Build prompt (\(conversationHistory.count) history turns): \(String(format: "%.0f", promptBuildTime * 1000))ms")
+
+            let spawnStart = Date()
             let (process, stdoutHandle) = try ClaudeCLIProvider.spawnProcess(
                 binaryPath: binaryPath,
                 systemPrompt: systemPrompt,
                 fullPrompt: fullPrompt,
                 model: model
             )
+            let spawnTime = Date().timeIntervalSince(spawnStart)
+            print("⏱️ [3/5] Spawn CLI process: \(String(format: "%.0f", spawnTime * 1000))ms")
+
+            let streamStart = Date()
             responseText = await ClaudeCLIProvider.parseStreamingResponse(
                 from: stdoutHandle,
                 onTextChunk: onTextChunk
             )
+            let streamTime = Date().timeIntervalSince(streamStart)
+            print("⏱️ [4/5] CLI stream + API response: \(String(format: "%.1f", streamTime))s")
+
             process.waitUntilExit()
+            print("⏱️ [5/5] Process exit (status \(process.terminationStatus))")
+
             if process.terminationStatus != 0 {
                 throw NSError(
                     domain: "ClaudeAPI",
@@ -105,21 +119,32 @@ class ClaudeAPI {
             }
 
         case .codex:
+            let promptBuildStart = Date()
             let fullPrompt = CodexCLIProvider.buildPrompt(
                 conversationHistory: conversationHistory,
                 userPrompt: userPrompt
             )
+            print("⏱️ [2/5] Build prompt: \(String(format: "%.0f", Date().timeIntervalSince(promptBuildStart) * 1000))ms")
+
+            let spawnStart = Date()
             let (process, stdoutHandle) = try CodexCLIProvider.spawnProcess(
                 binaryPath: binaryPath,
                 systemPrompt: systemPrompt,
                 fullPrompt: fullPrompt,
                 imageFilePaths: tempImageURLs.map(\.path)
             )
+            print("⏱️ [3/5] Spawn CLI process: \(String(format: "%.0f", Date().timeIntervalSince(spawnStart) * 1000))ms")
+
+            let streamStart = Date()
             responseText = await CodexCLIProvider.readPlainTextResponse(
                 from: stdoutHandle,
                 onTextChunk: onTextChunk
             )
+            print("⏱️ [4/5] CLI stream + API response: \(String(format: "%.1f", Date().timeIntervalSince(streamStart)))s")
+
             process.waitUntilExit()
+            print("⏱️ [5/5] Process exit (status \(process.terminationStatus))")
+
             if process.terminationStatus != 0 {
                 throw NSError(
                     domain: "ClaudeAPI",
@@ -129,10 +154,9 @@ class ClaudeAPI {
             }
         }
 
-        let cliTime = Date().timeIntervalSince(spawnTime)
-        let duration = Date().timeIntervalSince(startTime)
-        print("⏱️ CLI response time: \(String(format: "%.1f", cliTime))s, total: \(String(format: "%.1f", duration))s")
-        return (text: responseText, duration: duration)
+        let totalTime = Date().timeIntervalSince(startTime)
+        print("⏱️ Total AI round-trip: \(String(format: "%.1f", totalTime))s (\(responseText.count) chars)")
+        return (text: responseText, duration: totalTime)
     }
 
     func analyzeImage(
