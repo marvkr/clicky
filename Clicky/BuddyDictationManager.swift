@@ -519,9 +519,16 @@ final class BuddyDictationManager: NSObject, ObservableObject {
         activeTranscriptionSession?.cancel()
         activeTranscriptionSession = nil
 
-        // Create a fresh engine so outputFormat reflects the current hardware
-        // sample rate. A reused engine returns stale format info after stop/restart.
-        audioEngine = AVAudioEngine()
+        // Tear down the previous engine synchronously before we create a new one.
+        // Without this, the old engine's HAL IO thread can still be draining when
+        // the new engine tries to start, which produces:
+        //   - "HALB_IOThread::_Start: there already is a thread"
+        //   - "HALC_ProxyIOContext::_StartIO(): Start failed ... error 35" (EAGAIN)
+        // Calling stop() + reset() forces the old engine to release its HAL
+        // resources before we drop the reference.
+        audioEngine.stop()
+        audioEngine.inputNode.removeTap(onBus: 0)
+        audioEngine.reset()
 
         // Kill the localspeechrecognition service before starting a new session.
         // The service enters a broken state (Code=1101) after rapid start/stop
@@ -573,6 +580,15 @@ final class BuddyDictationManager: NSObject, ObservableObject {
         var lastError: Error?
         for attempt in 1...3 {
             do {
+                // Stop + reset the previous engine before discarding it so HAL
+                // releases its IO thread synchronously. Simply reassigning the
+                // property can leave the old IO thread alive and cause the new
+                // engine's start to fail with "there already is a thread" /
+                // error 35 (EAGAIN).
+                audioEngine.stop()
+                audioEngine.inputNode.removeTap(onBus: 0)
+                audioEngine.reset()
+
                 audioEngine = AVAudioEngine()
                 let inputNode = audioEngine.inputNode
                 let reportedFormat = inputNode.outputFormat(forBus: 0)
@@ -593,8 +609,9 @@ final class BuddyDictationManager: NSObject, ObservableObject {
                 lastError = error
                 audioEngine.stop()
                 audioEngine.inputNode.removeTap(onBus: 0)
+                audioEngine.reset()
                 // Brief pause before retry to let Core Audio settle
-                try await Task.sleep(for: .milliseconds(200))
+                try await Task.sleep(for: .milliseconds(300))
             }
         }
 

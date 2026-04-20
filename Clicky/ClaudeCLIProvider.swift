@@ -36,14 +36,18 @@ enum ClaudeCLIProvider {
         systemPrompt: String,
         fullPrompt: String,
         model: String
-    ) throws -> (process: Process, stdoutFileHandle: FileHandle) {
+    ) throws -> (process: Process, stdoutFileHandle: FileHandle, stderrFileHandle: FileHandle) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: binaryPath)
+        // `--bare` is NOT used here: it disables OAuth/keychain auth and requires
+        // ANTHROPIC_API_KEY in the environment. Since this fork authenticates
+        // via the user's existing `claude.ai` subscription (OAuth), `--bare`
+        // causes the CLI to exit with "Not logged in". Keep startup-trimming
+        // flags that don't affect auth (`--no-session-persistence`).
         process.arguments = [
             "--print",
             "--output-format", "stream-json",
             "--verbose",
-            "--bare",
             "--no-session-persistence",
             "--system-prompt", systemPrompt,
             "--model", model,
@@ -52,11 +56,16 @@ enum ClaudeCLIProvider {
         process.environment = AICLIUtils.makeProcessEnvironment()
 
         let stdoutPipe = Pipe()
+        let stderrPipe = Pipe()
         process.standardOutput = stdoutPipe
-        process.standardError = Pipe()
+        process.standardError = stderrPipe
 
         try process.run()
-        return (process: process, stdoutFileHandle: stdoutPipe.fileHandleForReading)
+        return (
+            process: process,
+            stdoutFileHandle: stdoutPipe.fileHandleForReading,
+            stderrFileHandle: stderrPipe.fileHandleForReading
+        )
     }
 
     /// Parses the streaming JSON output from the Claude CLI.

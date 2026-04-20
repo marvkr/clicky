@@ -87,6 +87,17 @@ private final class AppleSpeechTranscriptionSession: NSObject, BuddyStreamingTra
         recognitionRequest.taskHint = .unspecified
         recognitionRequest.addsPunctuation = true
 
+        // Force on-device recognition when supported. Without this, the framework
+        // defaults to server-side recognition, whose XPC pipe repeatedly gets
+        // wedged on this app and surfaces as Code=1101 ("connection to service
+        // failed") followed by 1110 ("no speech detected") — even when Apple's
+        // system dictation (fn, fn) works fine. On-device uses the same local
+        // model as system dictation and is what the zero-config fork intends
+        // ("free, on-device").
+        if speechRecognizer.supportsOnDeviceRecognition {
+            recognitionRequest.requiresOnDeviceRecognition = true
+        }
+
         recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
             self?.handleRecognitionEvent(result: result, error: error)
         }

@@ -90,7 +90,7 @@ class ClaudeAPI {
             print("⏱️ [2/5] Build prompt (\(conversationHistory.count) history turns): \(String(format: "%.0f", promptBuildTime * 1000))ms")
 
             let spawnStart = Date()
-            let (process, stdoutHandle) = try ClaudeCLIProvider.spawnProcess(
+            let (process, stdoutHandle, stderrHandle) = try ClaudeCLIProvider.spawnProcess(
                 binaryPath: binaryPath,
                 systemPrompt: systemPrompt,
                 fullPrompt: fullPrompt,
@@ -111,10 +111,19 @@ class ClaudeAPI {
             print("⏱️ [5/5] Process exit (status \(process.terminationStatus))")
 
             if process.terminationStatus != 0 {
+                let stderrData = stderrHandle.readDataToEndOfFile()
+                let stderrText = String(data: stderrData, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if !stderrText.isEmpty {
+                    print("❌ Claude CLI stderr:\n\(stderrText)")
+                }
+                let errorDescription = stderrText.isEmpty
+                    ? "Claude CLI exited with status \(process.terminationStatus)"
+                    : "Claude CLI exited with status \(process.terminationStatus): \(stderrText)"
                 throw NSError(
                     domain: "ClaudeAPI",
                     code: Int(process.terminationStatus),
-                    userInfo: [NSLocalizedDescriptionKey: "Claude CLI exited with status \(process.terminationStatus)"]
+                    userInfo: [NSLocalizedDescriptionKey: errorDescription]
                 )
             }
 
